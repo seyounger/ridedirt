@@ -52,9 +52,6 @@ class DBTool():
             return  
         except:
             self.logger.exception(f'addToDBDict outer catch')
-ogger.info(f'purging {hash_id} run_record_dict:{run_record_dict}')
-                    del dbdict[hash_id]
-            dbdict.commit()
 
         
     def my_encode(self,obj):#compresses whatever is put into the database
