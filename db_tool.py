@@ -63,7 +63,7 @@ class DBTool():
             
             
     ####################################################            
-    def re_encode(self,path): #for changing compression level of existing compressed sqlitedict
+    def re_encode(self,path): #for changing compression level of existing non-compressed sqlitedict
         assert os.path.exists(path),f'{path} does not exist'
         bpath=path+'_backup'
         os.rename(path,bpath)
