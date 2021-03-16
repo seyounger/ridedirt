@@ -1,6 +1,28 @@
 from db_tool import DBTool #for an easy way to store data in a compressed sqlite database
 from mylogger import myLogger #helpful for logging errors from multiprocessing objects in Windows or linux
 import pandas as pd
+import json
+import requests
+
+
+class DataCollector(myLogger):
+    def __init__(self,collection_id,data_key):
+        myLogger.__init__(self,name='datacollector.log')
+        self.collection_id=collection_id
+        self.data_key=data_key
+        self.g=self.getGeo()
+        
+        
+    def getGeo(self,):
+        with open('collection_geog.json','r') as f:
+            g=json.load(f)[self.collection_id]
+        return g
+    
+    def collect(self,date):
+        with open('secret.txt','r') as f:
+            api_key=f.read()
+        d=requests.get()
+        
 
 
 class SiteCollection(myLogger):
@@ -9,14 +31,15 @@ class SiteCollection(myLogger):
     ::self.collection_data contains a time series of data shared by the sites in the collectin
     ::self.site_data_collection contains the SingleSite objects collected together
     """
-    def __init__(self,collection_id):
+    def __init__(self,collection_id,data_key='weather'):
         myLogger.__init__(self,name='sitecollection.log') 
-        self.data_key='weather'
+        self.data_key=data_key
         self.collection_id=collection_id
         self.dbt=DBTool()
-        self.dc=DataCollector()
+        self.dc=DataCollector(self.collection_id,self.data_key)
         self.collection_data_db=lambda key:self.dbt.anyNameDB(f'collection_{self.collection_id}',tablename=key) 
-        self.site_data_collection=self.dbt.anyNameDB('site_data_collection',tablename=collection_id)
+        self.site_data_collection=self.collection_data_db('site_data_collection')
+        #self.site_data_collection=self.dbt.anyNameDB('site_data_collection',tablename=collection_id)
         self.train_dates=[]
         self.predict_dates=[]
     
@@ -26,7 +49,12 @@ class SiteCollection(myLogger):
             datelist.extend(site_obj.site_data['target'].index.get_level_values('Date').unique().to_list())
         self.train_dates=list(dict.from_keys(dates+self.train_dates))#unique values, preserving order
         
-    
+   
+    def getSiteData(self):
+        sitedata={}
+        for site_name,site_obj in self.site_data_collection().items():
+            sitedata[site_name]=site_obj.site_data['target']
+        return sitedata
     
     def updateCollectionData(self,):
         with self.collection_data_db(self.data_key) as c_db:
@@ -34,7 +62,7 @@ class SiteCollection(myLogger):
             collected_date_list=c_db['collected_date_list']
             for tdate in self.train_dates:
                 if not tdate in collected_date_list:
-                    df=DataCollector.collect(tdate,self.collection_id,self.data_key)
+                    df=self.dc.collect(tdate)
                     c_db['collected_date_list'].append(tdate)
                     if not 'data_df' in c_db:
                         c_db['data_df']=df
@@ -59,7 +87,6 @@ class SiteCollection(myLogger):
         for site_name in site_name_list:
             self.addSingleSiteData(site_name,df.loc[(slice(None),slice(None),site_name),:])
        
-    def
 
             
     def saveSingleSite(self,site_name,s_site_obj):
