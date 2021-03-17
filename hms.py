@@ -2,18 +2,21 @@ import os
 import json
 import requests
 import time
-import logging
+#import logging
+from my logger import myLogger
 
-logger = logging.getLogger(__name__)
+
+#logger = logging.getLogger(__name__)
 # hms_base_url = os.getenv("HMS_URL", "https://ceamdev.ceeopdev.net/hms/rest/api/v3/")
 # hms_data_url = os.getenv("HMS_DATA", "https://ceamdev.ceeopdev.net/hms/rest/api/v2/hms/data?job_id=")
 hms_base_url = os.getenv("HMS_URL", "https://qed.edap-cluster.com/hms/rest/api/v3/")
 hms_data_url = os.getenv("HMS_DATA", "https://qed.edap-cluster.com/hms/rest/api/v2/hms/data?job_id=")
 
 
-class HMS:
+class HMS(myLogger):
     #adapted from https://github.com/dbsmith88/hms-handler/blob/master/hms.py
     def __init__(self, start_date=None, end_date=None, source=None, dataset=None, module=None, cookies=None):
+        myLogger.__init__(self,name='hms.log')
         self.start_date = start_date
         self.end_date = end_date
         self.source = source
@@ -50,7 +53,7 @@ class HMS:
             self.geometry["geometryMetadata"] = metadata
 
     def get_request_body(self):
-        if any((self.dataset, self.source, self.start_date, self.end_date, self.geometry, self.module)) is None:
+        if any([param in [None,{}] for param in (self.dataset, self.source, self.start_date, self.end_date, self.geometry, self.module)]):
             logger.info("Missing required parameters, unable to create request.")
             return None
         request_body = {
@@ -92,17 +95,16 @@ class HMS:
         retry = 0
         n_retries = 100
         data_url = hms_data_url + self.task_id
-        success_fail = False
-        while retry < n_retries and not success_fail:
+        while retry < n_retries:
             response_txt = requests.get(data_url, cookies=self.cookies).text
             response_json = json.loads(response_txt)
             self.task_status = response_json["status"]
             if self.task_status == "SUCCESS":
                 self.data = response_json["data"]
-                success_fail = True
+                break
             elif self.task_status == "FAILURE":
-                success_fail = True
                 print("Failure: COMID: {}, {}".format(self.comid, response_json))
+                break
             else:
                 retry += 1
                 time.sleep(0.5 * retry)

@@ -1,5 +1,6 @@
 from db_tool import DBTool #for an easy way to store data in a compressed sqlite database
 from mylogger import myLogger #helpful for logging errors from multiprocessing objects in Windows or linux
+from hms import HMS #hydrologic micro services https://qed.epa.gov/hms
 import pandas as pd
 import json
 import requests
@@ -18,20 +19,32 @@ class DataCollector(myLogger):
             g=json.load(f)[self.collection_id]
         return g
     
-    def collect(self,date):
-        with open('secret.txt','r') as f:
-            api_key=f.read()
-        d=requests.get()
+    def collect(self,start_date,end_date,dataset='precipitation',source='nldas',modulel='hydrology'):
+        #start_date = "01-01-2000"
+        #end_date = "12-31-2018"
+        #cookies = {'sessionid': 'lmufmudjybph2r3ju0la15x5vuovz1pw'}
+        # cookies = {'sessionid': 'b5c5ev7usauevf2nro7e8mothmekqsnj'}
+        hms = HMS(start_date=start_date,
+                  end_date=end_date,
+                  source=source,
+                  dataset=dataset,
+                  module=module,
+                 )
+        geometry = getGeog()
+        hms.set_geometry(gtype='point', value=geometry)
+        hms.submit_request()
+        hms.print_info()
+        return json.loads(hms.data)
         
 
 
 class SiteCollection(myLogger):
     """
-    One of these for each park/collection of trails, etc. that share some preditor data (e.g., weather data)
+    One of these for each park/collection of trails, etc. that share some predictor data (e.g., weather data)
     ::self.collection_data contains a time series of data shared by the sites in the collectin
     ::self.site_data_collection contains the SingleSite objects collected together
     """
-    def __init__(self,collection_id,data_key='weather'):
+    def __init__(self,collection_id,data_key='hms'):
         myLogger.__init__(self,name='sitecollection.log') 
         self.data_key=data_key
         self.collection_id=collection_id
