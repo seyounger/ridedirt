@@ -19,19 +19,42 @@ class DataCollector(myLogger):
             g=json.load(f)[self.collection_id]
         return g
     
-    def collect(self,start_date,end_date,dataset='precipitation',source='nldas',modulel='hydrology'):
+    def collect(start_date,end_date):
+        if self.data_key.lower()=='hms':
+            vars_to_collect=['precipitation','evapotranspiration','humidity','soilmoisture','temperature','surfacerunoff']
+            collection=[]
+            for var in vars_to_collect:
+                result_data_dict=self.collectHMS(start_date,end_date,dataset=var)
+                try:
+                    errorstring=result_data_dict['metadata']['errors']
+                except KeyError:
+                    errorstring=result_data_dict['metadata']['ERROR']
+                except: assert False,'unexpected error'
+                if len(errorstring)>0:
+                    printstring=f'json_id:{json_id} has error:{errorstring}'
+                    self.logger.error(printstring)
+                    print(printstring)
+                data=result_data_dict['data']
+                collection.append(pd.Series(list(data.values()),name=var,index=list(data.keys())))
+            collection_df=pd.concat(list(collection.values()),axis=1)    
+            return collection_df
+            
+        else:
+            assert False,f'data_key:{data_key} not developed'
+    
+    def collectHMS(self,start_date,end_date=None,dataset='precipitation',source='nldas',module='hydrology'):
         #start_date = "01-01-2000"
         #end_date = "12-31-2018"
         #cookies = {'sessionid': 'lmufmudjybph2r3ju0la15x5vuovz1pw'}
         # cookies = {'sessionid': 'b5c5ev7usauevf2nro7e8mothmekqsnj'}
+        if end_date is None: end_date=start_date
         hms = HMS(start_date=start_date,
                   end_date=end_date,
                   source=source,
                   dataset=dataset,
                   module=module,
                  )
-        geometry = getGeog()
-        hms.set_geometry(gtype='point', value=geometry)
+        hms.set_geometry(gtype='point', value=self.g)
         hms.submit_request()
         hms.print_info()
         return json.loads(hms.data)
@@ -73,15 +96,16 @@ class SiteCollection(myLogger):
         with self.collection_data_db(self.data_key) as c_db:
         
             collected_date_list=c_db['collected_date_list']
-            for tdate in self.train_dates:
-                if not tdate in collected_date_list:
-                    df=self.dc.collect(tdate)
-                    c_db['collected_date_list'].append(tdate)
-                    if not 'data_df' in c_db:
-                        c_db['data_df']=df
-                    else:
-                        c_db['data_df']=pd.concat([c_db['data_df'],df],axis=0)
-                    c_db.commit()
+            collect_dates=[tdate for tdate in self.train_dates if not tdate in collected_date_list]
+            start_date=min(collect_dates)
+            end_date=max(collect_dates)
+            df=self.dc.collect(start_date,end_date)
+            c_db['collected_date_list'].extend(collect_dates)
+            if not 'data_df' in c_db:
+                c_db['data_df']=df
+            else:
+                c_db['data_df']=pd.concat([c_db['data_df'],df],axis=0)
+            c_db.commit()
                 
                 
         
