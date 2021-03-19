@@ -3,7 +3,7 @@ import json
 import requests
 import time
 #import logging
-from my logger import myLogger
+from mylogger import myLogger
 
 
 #logger = logging.getLogger(__name__)

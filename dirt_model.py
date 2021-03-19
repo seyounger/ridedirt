@@ -63,19 +63,21 @@ class DataCollector(myLogger):
 
 class SiteCollection(myLogger):
     """
-    One of these for each park/collection of trails, etc. that share some predictor data (e.g., weather data)
+    One of these for each park/collection of trails, etc. that share some predictor data (e.g., weather data, hydrology data)
     ::self.collection_data contains a time series of data shared by the sites in the collectin
-    ::self.site_data_collection contains the SingleSite objects collected together
+    ::self.site_data_collection contains the SingleSite objects collected together\
+    ::self.collection_predictor_data_db contains the data shared across sites in a collection.
     """
     def __init__(self,collection_id,data_key='hms'):
         myLogger.__init__(self,name='sitecollection.log') 
         self.data_key=data_key
         self.collection_id=collection_id
-        self.dbt=DBTool()
-        self.dc=DataCollector(self.collection_id,self.data_key)
-        self.collection_data_db=lambda key:self.dbt.anyNameDB(f'collection_{self.collection_id}',tablename=key) 
-        self.site_data_collection=self.collection_data_db('site_data_collection')
-        #self.site_data_collection=self.dbt.anyNameDB('site_data_collection',tablename=collection_id)
+        self.dbt=DBTool() # this attribute contains an object that handles the sqlite database, imported at the top
+        self.dc=DataCollector(self.collection_id,self.data_key)#retrieves the predictor data
+        self.collection_data_db=lambda key:self.dbt.anyNameDB(f'collection_{self.collection_id}',tablename=key) #a callable db for this object
+        self.site_data_collection=self.collection_data_db('site_data_collection') #a callable sqlite table in the collection's db
+        ##contains site_name:single_site-object key:val pairs.
+        self.collection_predictor_data_db=self.collection_data_db(self.data_key) # e.g., data from hms.
         self.train_dates=[]
         self.predict_dates=[]
     
@@ -93,18 +95,20 @@ class SiteCollection(myLogger):
         return sitedata
     
     def updateCollectionData(self,):
-        with self.collection_data_db(self.data_key) as c_db:
-        
-            collected_date_list=c_db['collected_date_list']
+        with self.collection_predictor_data_db() as c_db:
+            if 'collected_date_list' in c_db:
+                collected_date_list=c_db['collected_date_list']
+            else:
+                collected_date_list=[]
             collect_dates=[tdate for tdate in self.train_dates if not tdate in collected_date_list]
             start_date=min(collect_dates)
             end_date=max(collect_dates)
             df=self.dc.collect(start_date,end_date)
-            c_db['collected_date_list'].extend(collect_dates)
+            c_db['collected_date_list'].extend(collect_dates) 
             if not 'data_df' in c_db:
                 c_db['data_df']=df
             else:
-                c_db['data_df']=pd.concat([c_db['data_df'],df],axis=0)
+                c_db['data_df']=pd.concat([c_db['data_df'],df],axis=0).sort_index()
             c_db.commit()
                 
                 
@@ -169,6 +173,8 @@ class SingleSite(myLogger):
                 self.site_data['target']=pd.concat([prev_data,just_new_data])
             else:
                 self.logger.warning(f'no new data to add for site_name:{self.site_name}')'''
+            
+            
      
                 
         
