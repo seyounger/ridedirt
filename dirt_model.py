@@ -1,6 +1,8 @@
 from db_tool import DBTool #for an easy way to store data in a compressed sqlite database
 from mylogger import myLogger #helpful for logging errors from multiprocessing objects in Windows or linux
 from hms import HMS #hydrologic micro services https://qed.epa.gov/hms
+from stats_tools import SKModeler #does the statistics and predictions
+
 import pandas as pd
 import json
 import requests
@@ -99,11 +101,15 @@ class SiteCollection(myLogger):
             if 'collected_date_list' in c_db:
                 collected_date_list=c_db['collected_date_list']
             else:
+                c_db['collected_date_list']=[]
                 collected_date_list=[]
             collect_dates=[tdate for tdate in self.train_dates if not tdate in collected_date_list]
-            start_date=min(collect_dates)
-            end_date=max(collect_dates)
-            df=self.dc.collect(start_date,end_date)
+            #start_date=min(collect_dates)
+            #end_date=max(collect_dates)
+            dflist=[]
+            for tdate in collect_dates:
+                dflist.append(self.dc.collect(tdate,tdate))
+            df=pd.concat(dflist,axis=0)
             c_db['collected_date_list'].extend(collect_dates) 
             if not 'data_df' in c_db:
                 c_db['data_df']=df
@@ -148,12 +154,13 @@ class SiteCollection(myLogger):
             f.write(html_str)
             
     
-    
+
         
 
-class SingleSite(myLogger):
+class SingleSite(SKModeler):
     def __init__(self,site_name,collection_id):
-        myLogger.__init__(self,name='Destination.log') 
+        super().__init__() #starts up parent, SKModeler
+        self.logger.info(f'initializing site_name: {site_name} in collection_id: {collection_id}')
         self.site_name=site_name
         self.collection_id=collection_id
         self.site_data={'target':None,'x':None}#DBTool().anyNameDB('_data',tablename=collection_id) #data shared
@@ -173,6 +180,8 @@ class SingleSite(myLogger):
                 self.site_data['target']=pd.concat([prev_data,just_new_data])
             else:
                 self.logger.warning(f'no new data to add for site_name:{self.site_name}')'''
+    def runModel(self,predictor_data):
+        self.createModelRun(predictor_data,self.site_data['target'])
             
             
      
